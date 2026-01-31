@@ -1,0 +1,169 @@
+# =============================================================================
+# REDTEAM AI - DGX LIGHT EDITION
+# Base: Ollama Official (GPU Ready)
+# Contient: Ollama + Outils Web/Infra + Scripting Python léger
+# Ne contient PAS: PyTorch, TensorFlow, Flower (Training libs)
+# =============================================================================
+FROM ollama/ollama:latest
+
+LABEL maintainer="RedTeam-DGX-Light"
+
+# --- 1. CONFIGURATION ENVIRONNEMENT ---
+ENV DEBIAN_FRONTEND=noninteractive \
+    GOROOT=/usr/local/go \
+    GOPATH=/root/go \
+    PIPX_HOME=/opt/pipx \
+    PIPX_BIN_DIR=/usr/local/bin \
+    # Ajout au PATH
+    PATH="/opt/venv/bin:/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/bin:/bin:${PATH}" \
+    LANG=C.UTF-8
+
+# =============================================================================
+# 2. DÉPENDANCES SYSTÈME
+# =============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Base
+    build-essential curl wget git unzip zip jq tmux vim nano \
+    software-properties-common gnupg lsb-release \
+    # Réseau
+    nmap masscan dnsutils iputils-ping net-tools whois proxychains4 tcpdump tshark \
+    # Deps Python/Ruby/Libs
+    python3 python3-pip python3-venv python3-dev \
+    ruby-full ruby-dev \
+    libpcap-dev libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev \
+    libfreetype6-dev libjpeg-dev liblcms2-dev libgmp-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# =============================================================================
+# 3. GOLANG (Dernière Stable)
+# =============================================================================
+RUN set -eux; \
+    ARCH="amd64"; \
+    GO_VERSION="1.23.1"; \
+    echo "⬇️ Downloading Go ${GO_VERSION}..." && \
+    wget -q "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -O go.tar.gz && \
+    tar -C /usr/local -xzf go.tar.gz && \
+    rm go.tar.gz
+
+# =============================================================================
+# 4. ARSENAL GO (WEB & RECON)
+# =============================================================================
+RUN echo "🛠️ Installing Go Tools..." && \
+    # ProjectDiscovery
+    go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
+    go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
+    go install -v github.com/projectdiscovery/katana/cmd/katana@latest && \
+    go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest && \
+    go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest && \
+    go install -v github.com/projectdiscovery/notify/cmd/notify@latest && \
+    # Web Utils
+    go install -v github.com/tomnomnom/gf@latest && \
+    go install -v github.com/tomnomnom/qsreplace@latest && \
+    go install -v github.com/tomnomnom/waybackurls@latest && \
+    go install -v github.com/lc/gau/v2/cmd/gau@latest && \
+    go install -v github.com/hakluke/hakrawler@latest && \
+    go install -v github.com/hahwul/dalfox/v2@latest && \
+    go install -v github.com/OJ/gobuster/v3@latest && \
+    # Correction Amass
+    go install -v github.com/owasp-amass/amass/v4/cmd/amass@latest && \
+    # Infra & Pivot
+    go install -v github.com/ropnop/kerbrute@latest && \
+    go install -v github.com/jpillora/chisel@latest && \
+    go install -v github.com/nicocha30/ligolo-ng/cmd/proxy@latest && \
+    go install -v github.com/nicocha30/ligolo-ng/cmd/agent@latest && \
+    # Setup
+    cp /root/go/bin/* /usr/local/bin/ && \
+    ln -s /usr/local/bin/httpx /usr/local/bin/httpx-toolkit
+
+# =============================================================================
+# 5. PYTHON TOOLS (PIPX)
+# =============================================================================
+# Fix PEP 668 pour pipx
+RUN python3 -m pip install --no-cache-dir --break-system-packages pipx && \
+    python3 -m pipx ensurepath
+
+# Outils Infra
+RUN pipx install git+https://github.com/Pennyw0rth/NetExec.git --include-deps --force
+RUN pipx install certipy-ad --force
+RUN pipx install bloodhound --force
+RUN pipx install mitm6 --force
+
+# Outils Web
+RUN pipx install sqlmap --force
+RUN pipx install arjun --force
+RUN pipx install dirsearch --force
+RUN pipx install uro --force
+RUN pipx install tldextract --force
+
+# =============================================================================
+# 6. LIBS PYTHON POUR L'AGENT (SCRIPTING ONLY)
+# =============================================================================
+# On garde juste ce qu'il faut pour que ton script 'agent.py' fonctionne
+# SANS PyTorch/Tensorflow
+RUN python3 -m venv /opt/venv
+RUN /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip install --no-cache-dir \
+    # Client Ollama & IA
+    ollama \
+    # Gestion des données & Parsing
+    pydantic \
+    beautifulsoup4 \
+    requests \
+    loguru \
+    # Base de données vectorielle (Légère pour RAG)
+    chromadb \
+    # Génération PDF
+    reportlab pypdf fpdf2
+
+# =============================================================================
+# 7. OUTILS MANUELS & INFRA
+# =============================================================================
+WORKDIR /opt
+
+# Findomain
+RUN wget -q https://github.com/findomain/findomain/releases/latest/download/findomain-linux.zip && \
+    unzip findomain-linux.zip && chmod +x findomain && \
+    mv findomain /usr/local/bin/ && rm findomain-linux.zip
+
+# Responder
+RUN git clone --depth 1 https://github.com/lgandx/Responder.git && \
+    chmod +x /opt/Responder/Responder.py && \
+    ln -sf /opt/Responder/Responder.py /usr/local/bin/responder
+
+# Corsy
+RUN git clone --depth 1 https://github.com/s0md3v/Corsy.git && \
+    cd Corsy && pip install -r requirements.txt --break-system-packages && \
+    chmod +x corsy.py && \
+    ln -sf /opt/Corsy/corsy.py /usr/local/bin/corsy
+
+# Metasploit
+RUN curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > msfinstall && \
+    chmod 755 msfinstall && ./msfinstall
+RUN gem install wpscan evil-winrm --no-document
+
+# =============================================================================
+# 8. CONFIGURATION & ENTRYPOINT
+# =============================================================================
+WORKDIR /root
+# GF Patterns
+RUN mkdir -p /root/.gf && \
+    git clone --depth 1 https://github.com/1ndianl33t/Gf-Patterns /tmp/gf1 && \
+    cp /tmp/gf1/*.json /root/.gf/ && rm -rf /tmp/gf1
+
+# Nuclei Templates
+RUN nuclei -update-templates || echo "Nuclei update skipped"
+
+# Entrypoint : Lancement d'Ollama + Bash
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'echo "🔴 [INIT] Démarrage du serveur Ollama..."' >> /entrypoint.sh && \
+    echo 'ollama serve > /var/log/ollama_bg.log 2>&1 &' >> /entrypoint.sh && \
+    echo 'echo "⏳ [WAIT] Attente de Ollama (Port 11434)..."' >> /entrypoint.sh && \
+    echo 'until curl -s http://localhost:11434 > /dev/null; do sleep 1; done' >> /entrypoint.sh && \
+    echo 'echo "✅ [READY] Agent IA + Outils Pentest chargés !"' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+WORKDIR /app
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]
