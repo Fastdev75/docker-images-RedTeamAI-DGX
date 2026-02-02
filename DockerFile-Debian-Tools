@@ -1,52 +1,53 @@
 # =============================================================================
-# DGX H200 ARSENAL - ULTIMATE EDITION (Debian 12 + CUDA 12.4)
-# Verified for: NVIDIA H200 (Hopper Architecture)
+# DGX H200 PENTEST ARSENAL - ULTIMATE EDITION (V20)
+# Base: Debian 12 (Bookworm)
+# Kernel: NVIDIA CUDA 12.4 (Hopper Optimized)
 # =============================================================================
 FROM debian:bookworm
 
-LABEL maintainer="RedTeam-DGX-Optimized"
+LABEL maintainer="RedTeam-DGX-Ultimate"
 
 # --- 1. CONFIGURATION ENVIRONNEMENT ---
 ENV DEBIAN_FRONTEND=noninteractive \
-    # Go configuration
+    # Go config
     GOROOT=/usr/local/go \
     GOPATH=/root/go \
-    # Python Pipx
+    # Python Pipx config
     PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/usr/local/bin \
-    # NVIDIA / CUDA Environment (CRITIQUE POUR DGX)
+    # NVIDIA / CUDA Config (CRITIQUE POUR H200)
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility,video \
     LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}" \
-    # PATH global unifié
+    # PATH Global (Go + CUDA + Sys)
     PATH="/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/local/cuda/bin:/usr/bin:/bin:${PATH}" \
     LANG=C.UTF-8
 
 # =============================================================================
-# 2. DÉPENDANCES SYSTÈME (APT) - INSTALLATION ROBUSTE
+# 2. DÉPENDANCES SYSTÈME (APT)
 # =============================================================================
-# On installe d'abord les outils pour récupérer les clés et les drivers
+# Ajout de 'hydra' et 'socat' ici
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Core Utils
+    # Core
     build-essential curl wget git unzip zip jq tmux vim nano \
     software-properties-common ca-certificates gnupg lsb-release \
-    # Network Tools
+    # Network & Attack
     nmap masscan dnsutils iputils-ping net-tools whois proxychains4 tcpdump tshark \
+    hydra socat \
     # Hardware / GPU Utils
     pciutils lshw clinfo \
-    # Libraries for compiling tools (Python/Ruby/C)
+    # Libs Compilation (Python/Ruby/C)
     python3 python3-pip python3-venv python3-dev \
     ruby-full ruby-dev \
     libpcap-dev libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev \
     libfreetype6-dev libjpeg-dev liblcms2-dev libgmp-dev \
-    # OpenCL Headers (Indispensable pour compiler Hashcat pour le GPU)
+    # OpenCL Headers (Indispensable pour compiler Hashcat GPU)
     ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers \
     && rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
 # 3. NVIDIA CUDA TOOLKIT 12.4 (OFFICIAL REPO)
 # =============================================================================
-# Installation des drivers officiels pour Debian 12 afin de supporter le H200
 RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb && \
     dpkg -i /tmp/cuda-keyring.deb && \
     rm /tmp/cuda-keyring.deb && \
@@ -55,19 +56,18 @@ RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/debian12/x8
     rm -rf /var/lib/apt/lists/*
 
 # =============================================================================
-# 4. HASHCAT & HCXTOOLS (COMPILATION GPU OPTIMISÉE)
+# 4. HASHCAT & HCXTOOLS (SOURCE BUILD)
 # =============================================================================
-# Compilation depuis les sources pour lier correctement à OpenCL/CUDA
 RUN git clone https://github.com/hashcat/hashcat.git /opt/hashcat && \
     make -C /opt/hashcat && \
     make -C /opt/hashcat install && \
-    # Outils capture Wifi/Pcap convert
+    # HCX Tools
     git clone https://github.com/ZerBea/hcxtools.git /opt/hcxtools && \
     make -C /opt/hcxtools && \
     make -C /opt/hcxtools install
 
 # =============================================================================
-# 5. GOLANG 1.23.1 (MANUAL INSTALL)
+# 5. GOLANG 1.23.1
 # =============================================================================
 RUN set -eux; \
     ARCH="amd64"; \
@@ -78,10 +78,11 @@ RUN set -eux; \
     rm /tmp/go.tar.gz
 
 # =============================================================================
-# 6. ARSENAL GO (PROJECT DISCOVERY & OTHERS)
+# 6. ARSENAL GO (COMPLETE)
 # =============================================================================
+# Ajout de FFUF ici
 RUN echo "🛠️ Installing Go Tools..." && \
-    # ProjectDiscovery Suite
+    # ProjectDiscovery
     go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
     go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
     go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
@@ -89,7 +90,8 @@ RUN echo "🛠️ Installing Go Tools..." && \
     go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest && \
     go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest && \
     go install -v github.com/projectdiscovery/notify/cmd/notify@latest && \
-    # Web Recon Tools
+    # Web Recon & Fuzzing
+    go install -v github.com/ffuf/ffuf/v2@latest && \
     go install -v github.com/tomnomnom/gf@latest && \
     go install -v github.com/tomnomnom/qsreplace@latest && \
     go install -v github.com/tomnomnom/waybackurls@latest && \
@@ -97,26 +99,26 @@ RUN echo "🛠️ Installing Go Tools..." && \
     go install -v github.com/hakluke/hakrawler@latest && \
     go install -v github.com/hahwul/dalfox/v2@latest && \
     go install -v github.com/OJ/gobuster/v3@latest && \
-    # Amass (Chemin v4 vérifié)
     go install -v github.com/owasp-amass/amass/v4/cmd/amass@latest && \
-    # Infra & Pivot
+    # Infra
     go install -v github.com/ropnop/kerbrute@latest && \
     go install -v github.com/jpillora/chisel@latest && \
     go install -v github.com/nicocha30/ligolo-ng/cmd/proxy@latest && \
     go install -v github.com/nicocha30/ligolo-ng/cmd/agent@latest && \
-    # Finalisation : Copie globale
+    # Copie finale
     cp /root/go/bin/* /usr/local/bin/ && \
     ln -s /usr/local/bin/httpx /usr/local/bin/httpx-toolkit
 
 # =============================================================================
-# 7. PYTHON TOOLS (VIA PIPX)
+# 7. PYTHON TOOLS (PIPX)
 # =============================================================================
-# Installation de Pipx en contournant la sécurité Debian "Externally Managed" juste pour pipx
+# Ajout de Impacket et Coercer
 RUN python3 -m pip install --no-cache-dir --break-system-packages pipx && \
     python3 -m pipx ensurepath
 
-# Outils Python critiques
 RUN pipx install git+https://github.com/Pennyw0rth/NetExec.git --include-deps --force && \
+    pipx install impacket --force && \
+    pipx install coercer --force && \
     pipx install certipy-ad --force && \
     pipx install bloodhound --force && \
     pipx install mitm6 --force && \
@@ -127,48 +129,35 @@ RUN pipx install git+https://github.com/Pennyw0rth/NetExec.git --include-deps --
     pipx install tldextract --force
 
 # =============================================================================
-# 8. OUTILS MANUELS (INSTALLATION DIRECTE)
+# 8. RESSOURCES & LISTS (NEW)
 # =============================================================================
+# SecLists (Attention: ~1GB)
+RUN git clone --depth 1 https://github.com/danielmiessler/SecLists.git /opt/SecLists
 
-# Findomain (URL release Linux 64bit)
+# PEASS-ng (Privilege Escalation scripts ready to serve)
+RUN mkdir -p /opt/PEASS && \
+    wget -q https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -O /opt/PEASS/linpeas.sh && \
+    wget -q https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx64.exe -O /opt/PEASS/winPEASx64.exe && \
+    chmod +x /opt/PEASS/linpeas.sh
+
+# =============================================================================
+# 9. OUTILS MANUELS
+# =============================================================================
+# Findomain
 RUN wget -q https://github.com/findomain/findomain/releases/latest/download/findomain-linux.zip -O /tmp/findomain.zip && \
     unzip /tmp/findomain.zip -d /tmp/ && chmod +x /tmp/findomain && \
     mv /tmp/findomain /usr/local/bin/ && rm /tmp/findomain.zip
 
-# Responder (Toujours cloner la dernière version)
+# Responder
 RUN git clone --depth 1 https://github.com/lgandx/Responder.git /opt/Responder && \
     chmod +x /opt/Responder/Responder.py && \
     ln -sf /opt/Responder/Responder.py /usr/local/bin/responder
 
-# Corsy (Scanner CORS)
+# Corsy
 RUN git clone --depth 1 https://github.com/s0md3v/Corsy.git /opt/Corsy && \
     python3 -m pip install -r /opt/Corsy/requirements.txt --break-system-packages && \
     chmod +x /opt/Corsy/corsy.py && \
     ln -sf /opt/Corsy/corsy.py /usr/local/bin/corsy
 
-# Metasploit Framework (Script Omnibus officiel)
-RUN curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall && \
-    chmod 755 /tmp/msfinstall && \
-    /tmp/msfinstall && \
-    rm /tmp/msfinstall
-
-# Gems Ruby Utiles
-RUN gem install wpscan evil-winrm --no-document
-
-# =============================================================================
-# 9. CONFIGURATION FINALE
-# =============================================================================
-
-# GF Patterns
-RUN mkdir -p /root/.gf && \
-    git clone --depth 1 https://github.com/1ndianl33t/Gf-Patterns /tmp/gf1 && \
-    cp /tmp/gf1/*.json /root/.gf/ && rm -rf /tmp/gf1
-
-# Nuclei Templates Update
-RUN nuclei -update-templates || echo "Nuclei update skipped"
-
-# Nettoyage final pour l'image
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Point d'entrée
-CMD ["/bin/bash"]
+# Metasploit
+RUN curl
