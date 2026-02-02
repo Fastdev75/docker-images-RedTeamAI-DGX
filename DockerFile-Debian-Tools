@@ -1,5 +1,5 @@
 # =============================================================================
-# DGX H200 PENTEST ARSENAL - ULTIMATE EDITION (V20)
+# DGX H200 PENTEST ARSENAL - ULTIMATE EDITION (V21 - FIX LIB)
 # Base: Debian 12 (Bookworm)
 # Kernel: NVIDIA CUDA 12.4 (Hopper Optimized)
 # =============================================================================
@@ -26,11 +26,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # =============================================================================
 # 2. DÉPENDANCES SYSTÈME (APT)
 # =============================================================================
-# Ajout de 'hydra' et 'socat' ici
+# FIX: Ajout de 'libcurl4-openssl-dev' et 'pkg-config' pour la compilation hcxtools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Core
     build-essential curl wget git unzip zip jq tmux vim nano \
-    software-properties-common ca-certificates gnupg lsb-release \
+    software-properties-common ca-certificates gnupg lsb-release pkg-config \
     # Network & Attack
     nmap masscan dnsutils iputils-ping net-tools whois proxychains4 tcpdump tshark \
     hydra socat \
@@ -41,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ruby-full ruby-dev \
     libpcap-dev libssl-dev libffi-dev libxml2-dev libxslt1-dev zlib1g-dev \
     libfreetype6-dev libjpeg-dev liblcms2-dev libgmp-dev \
+    libcurl4-openssl-dev \
     # OpenCL Headers (Indispensable pour compiler Hashcat GPU)
     ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers \
     && rm -rf /var/lib/apt/lists/*
@@ -80,7 +81,6 @@ RUN set -eux; \
 # =============================================================================
 # 6. ARSENAL GO (COMPLETE)
 # =============================================================================
-# Ajout de FFUF ici
 RUN echo "🛠️ Installing Go Tools..." && \
     # ProjectDiscovery
     go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
@@ -112,7 +112,6 @@ RUN echo "🛠️ Installing Go Tools..." && \
 # =============================================================================
 # 7. PYTHON TOOLS (PIPX)
 # =============================================================================
-# Ajout de Impacket et Coercer
 RUN python3 -m pip install --no-cache-dir --break-system-packages pipx && \
     python3 -m pipx ensurepath
 
@@ -129,12 +128,12 @@ RUN pipx install git+https://github.com/Pennyw0rth/NetExec.git --include-deps --
     pipx install tldextract --force
 
 # =============================================================================
-# 8. RESSOURCES & LISTS (NEW)
+# 8. RESSOURCES & LISTS
 # =============================================================================
-# SecLists (Attention: ~1GB)
+# SecLists (Clone partiel pour éviter timeout/trop gros)
 RUN git clone --depth 1 https://github.com/danielmiessler/SecLists.git /opt/SecLists
 
-# PEASS-ng (Privilege Escalation scripts ready to serve)
+# PEASS-ng
 RUN mkdir -p /opt/PEASS && \
     wget -q https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh -O /opt/PEASS/linpeas.sh && \
     wget -q https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx64.exe -O /opt/PEASS/winPEASx64.exe && \
@@ -177,7 +176,6 @@ RUN mkdir -p /root/.gf && \
 
 RUN nuclei -update-templates || echo "Nuclei update skipped"
 
-# Nettoyage final pour gagner de la place
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 CMD ["/bin/bash"]
