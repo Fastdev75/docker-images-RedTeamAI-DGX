@@ -160,4 +160,24 @@ RUN git clone --depth 1 https://github.com/s0md3v/Corsy.git /opt/Corsy && \
     ln -sf /opt/Corsy/corsy.py /usr/local/bin/corsy
 
 # Metasploit
-RUN curl
+RUN curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall && \
+    chmod 755 /tmp/msfinstall && \
+    /tmp/msfinstall && \
+    rm /tmp/msfinstall
+
+# Gems
+RUN gem install wpscan evil-winrm --no-document
+
+# =============================================================================
+# 10. FINALISATION
+# =============================================================================
+RUN mkdir -p /root/.gf && \
+    git clone --depth 1 https://github.com/1ndianl33t/Gf-Patterns /tmp/gf1 && \
+    cp /tmp/gf1/*.json /root/.gf/ && rm -rf /tmp/gf1
+
+RUN nuclei -update-templates || echo "Nuclei update skipped"
+
+# Nettoyage final pour gagner de la place
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+CMD ["/bin/bash"]
